@@ -4,9 +4,8 @@ import '@szhsin/react-menu/dist/index.css'
 import '@szhsin/react-menu/dist/transitions/slide.css'
 import { useAppSelector } from 'app/hooks'
 import { api } from 'app/services/api'
+import { SignIn } from 'components/SignIn/SignIn'
 import { selectAuth } from 'features/auth/authSlice'
-import { ReactComponent as LogoOpen } from 'logo-open.svg'
-import { ReactComponent as Logo } from 'logo.svg'
 import { FaUserCircle } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import { SignOut } from '../SignOut'
@@ -22,12 +21,10 @@ export const Header = () => {
   return (
     <nav className={styles.header}>
       <Link className={styles.logoContainer} to="/">
-        <Logo className={styles.logo} />
-        <LogoOpen className={styles.logoOpen} />{' '}
-        {auth.isLoggedIn === false && <span>sleepy.bike</span>}
+        Community Manager
       </Link>
       <div className={styles.spacer} />
-      {auth.isLoggedIn === true && (
+      {auth.isLoggedIn === true ? (
         <Menu
           menuButton={
             <MenuButton>
@@ -39,19 +36,17 @@ export const Header = () => {
             </MenuButton>
           }
         >
-          <MenuItem>
-            <Link to="profile">{profile?.name ?? 'profile'}</Link>
-          </MenuItem>
-          <MenuItem>
-            <Link to="messages">messages</Link>
-          </MenuItem>
+          {auth.profile?.name && <MenuItem>{auth.profile.name}</MenuItem>}
           <MenuDivider />
           <MenuItem>
             <SignOut />
           </MenuItem>
         </Menu>
+      ) : auth.isLoggedIn === false ? (
+        <SignIn />
+      ) : (
+        <>...</>
       )}
-      {auth.isLoggedIn === undefined && <>...</>}
     </nav>
   )
 }

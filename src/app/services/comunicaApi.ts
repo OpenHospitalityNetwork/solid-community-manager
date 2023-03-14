@@ -3,7 +3,7 @@ import { fetch } from '@inrupt/solid-client-authn-browser'
 import type { BaseQueryFn } from '@reduxjs/toolkit/dist/query/baseQueryTypes'
 import { createApi } from '@reduxjs/toolkit/dist/query/react'
 import { DataFactory, Quad, Triple, Writer } from 'n3'
-import { dct, rdf, schema_https } from 'rdf-namespaces'
+import { acl, dct, foaf, rdf, schema_https, sioc, vcard } from 'rdf-namespaces'
 import { Accommodation, URI } from 'types'
 // import { bindingsStreamToGraphQl } from '@comunica/actor-query-result-serialize-tree'
 // import { accommodationContext } from 'ldo/accommodation.context'
@@ -143,6 +143,20 @@ export const comunicaApi = createApi({
         { type: 'Accommodation', id: arg.id },
       ],
     }),
+    saveCommunity: builder.mutation<
+      unknown,
+      {
+        groupId: URI
+        communityId: URI
+        webId: URI
+        data: { name: string; description: string }
+      }
+    >({
+      queryFn: async props => {
+        await saveCommunity(props)
+        return { data: null }
+      },
+    }),
   }),
 })
 
@@ -215,6 +229,111 @@ export const comunicaApi = createApi({
 
 //   return data
 // }
+
+export const saveCommunity = async ({
+  groupId,
+  communityId,
+  webId,
+  data,
+}: {
+  communityId: URI
+  groupId: URI
+  webId: URI
+  data: {
+    name: string
+    description: string
+  }
+}) => {
+  // save community data
+  const communityQuery = query`INSERT DATA {
+    <${communityId}>
+        <${rdf.type}>
+            <${hospex}Community>,
+            <${sioc.Community}>;
+        <${sioc.name}> "${data.name}"@en;
+        <${sioc.about}> """${data.description}"""@en;
+        <${sioc.has_usergroup}> <${groupId}>.
+  }`
+  await myEngine.queryVoid(communityQuery, {
+    sources: [communityId],
+    lenient: true,
+    destination: { type: 'patchSparqlUpdate', value: communityId },
+    fetch,
+  })
+
+  // save group data
+  const groupQuery = query`INSERT DATA {
+    <${groupId}>
+        <${rdf.type}>
+            <${sioc.Usergroup}>,
+            <${vcard.Group}>;
+        <${sioc.has_usergroup}> <${communityId}>.
+  }`
+  await myEngine.queryVoid(groupQuery, {
+    sources: [groupId],
+    lenient: true,
+    destination: { type: 'patchSparqlUpdate', value: groupId },
+    fetch,
+  })
+
+  // set readonly public permissions on community
+  const communityDocument = removeHashFromURI(communityId)
+  const communityAcl = communityDocument + '.acl'
+  const communityAclQuery = query`INSERT DATA {
+    <${communityAcl}#Control>
+        <${rdf.type}> <${acl.Authorization}>;
+        <${acl.agent}> <${webId}>;
+        <${acl.accessTo}> <${communityDocument}>;
+        <${acl.mode}> <${acl.Read}>, <${acl.Write}>, <${acl.Control}>.
+    <${communityAcl}#Read>
+        <${rdf.type}> <${acl.Authorization}>;
+        <${acl.agentClass}> <${foaf.Agent}>;
+        <${acl.accessTo}> <${communityDocument}>;
+        <${acl.mode}> <${acl.Read}>.
+  }`
+  await myEngine.queryVoid(communityAclQuery, {
+    sources: [communityAcl],
+    lenient: true,
+    destination: { type: 'patchSparqlUpdate', value: communityAcl },
+    fetch,
+  })
+
+  // set read & append on group
+  const groupDocument = removeHashFromURI(groupId)
+  const groupAcl = groupDocument + '.acl'
+  const groupAclQuery = query`INSERT DATA {
+    <${groupAcl}#Control>
+        <${rdf.type}> <${acl.Authorization}>;
+        <${acl.agent}> <${webId}>;
+        <${acl.accessTo}> <${groupDocument}>;
+        <${acl.mode}> <${acl.Read}>, <${acl.Write}>, <${acl.Control}>.
+    <${groupAcl}#Read>
+        <${rdf.type}> <${acl.Authorization}>;
+        <${acl.agentClass}> <${foaf.Agent}>;
+        <${acl.agentGroup}> <${groupId}>;
+        <${acl.accessTo}> <${groupDocument}>;
+        <${acl.mode}> <${acl.Read}>.
+    <${groupAcl}#Append>
+        <${rdf.type}> <${acl.Authorization}>;
+        <${acl.agentClass}> <${acl.AuthenticatedAgent}>;
+        <${acl.accessTo}> <${groupDocument}>;
+        <${acl.mode}> <${acl.Append}>.
+  }`
+  await myEngine.queryVoid(groupAclQuery, {
+    sources: [groupAcl],
+    lenient: true,
+    destination: { type: 'patchSparqlUpdate', value: groupAcl },
+    fetch,
+  })
+
+  await myEngine.invalidateHttpCache()
+}
+
+function removeHashFromURI(uri: string): string {
+  const url = new URL(uri)
+  url.hash = ''
+  return url.toString()
+}
 
 export const saveAccommodation = async ({
   webId,

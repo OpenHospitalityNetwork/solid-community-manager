@@ -42,7 +42,7 @@ export const SignIn = () => {
     await login({
       oidcIssuer,
       redirectUrl: window.location.href,
-      clientName: 'sleepy.bike',
+      clientName: 'solid-community-manager',
     })
   }
 
